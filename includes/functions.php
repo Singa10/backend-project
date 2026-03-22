@@ -108,3 +108,141 @@ function generateStars($rating) {
 function isValidEmail($email) {
     return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
+// =============================================
+// 8. VALIDATE PASSWORD STRENGTH
+// Must have: 6+ chars, 1 upper, 1 lower, 1 number
+// Returns: true or error message string
+// =============================================
+function validatePassword($password) {
+    if (strlen($password) < 6) {
+        return "Password must be at least 6 characters.";
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        return "Password must contain at least 1 uppercase letter.";
+    }
+    if (!preg_match('/[a-z]/', $password)) {
+        return "Password must contain at least 1 lowercase letter.";
+    }
+    if (!preg_match('/[0-9]/', $password)) {
+        return "Password must contain at least 1 number.";
+    }
+    return true;
+}
+
+// =============================================
+// 9. VALIDATE USERNAME
+// Must be: 3-50 chars, only letters/numbers/underscores
+// Returns: true or error message string
+// =============================================
+function validateUsername($username) {
+    if (strlen($username) < 3 || strlen($username) > 50) {
+        return "Username must be 3-50 characters.";
+    }
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+        return "Username can only contain letters, numbers, and underscores.";
+    }
+    return true;
+}
+
+// =============================================
+// 10. TRUNCATE TEXT
+// Shortens text to a max length with "..."
+// Usage: truncateText("Long text here...", 50)
+// =============================================
+function truncateText($text, $maxLength = 100) {
+    if (strlen($text) <= $maxLength) {
+        return $text;
+    }
+    return substr($text, 0, $maxLength) . '...';
+}
+
+// =============================================
+// 11. FORMAT DATE
+// Converts MySQL timestamp to readable format
+// Usage: formatDate('2025-01-15 14:30:00') → "Jan 15, 2025"
+// =============================================
+function formatDate($date, $format = 'M d, Y') {
+    return date($format, strtotime($date));
+}
+
+// =============================================
+// 12. FORMAT DATE WITH TIME
+// Usage: formatDateTime('2025-01-15 14:30:00') → "Jan 15, 2025 2:30 PM"
+// =============================================
+function formatDateTime($date) {
+    return date('M d, Y g:i A', strtotime($date));
+}
+
+// =============================================
+// 13. GENERATE ORDER ID DISPLAY
+// Usage: formatOrderId(42) → "#ORD-042"
+// =============================================
+function formatOrderId($id) {
+    return "#ORD-" . str_pad($id, 3, '0', STR_PAD_LEFT);
+}
+
+// =============================================
+// 14. GET STATUS BADGE CLASS
+// Returns CSS class based on order status
+// =============================================
+function getStatusClass($status) {
+    $classes = [
+        'pending'    => 'status-pending',
+        'processing' => 'status-processing',
+        'shipped'    => 'status-shipped',
+        'completed'  => 'status-completed',
+        'cancelled'  => 'status-cancelled',
+    ];
+    return $classes[$status] ?? 'status-pending';
+}
+
+// =============================================
+// 15. SEND JSON RESPONSE
+// Quick way to return JSON from PHP
+// Usage: sendJson(true, 'Success!', ['id' => 1])
+// =============================================
+function sendJson($success, $message = '', $data = null) {
+    header('Content-Type: application/json');
+    $response = [
+        'success' => $success,
+        'message' => $message,
+    ];
+    if ($data !== null) {
+        $response['data'] = $data;
+    }
+    echo json_encode($response);
+    exit();
+}
+
+// =============================================
+// 16. CHECK IF REQUEST IS AJAX
+// Returns true if request was made via fetch/XHR
+// =============================================
+function isAjaxRequest() {
+    return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+}
+
+// =============================================
+// 17. GET CLIENT IP ADDRESS
+// Useful for logging/security
+// =============================================
+function getClientIP() {
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        return $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        return $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    }
+}
+
+// =============================================
+// 18. GENERATE RANDOM TOKEN
+// Useful for password reset, CSRF, etc.
+// Usage: generateToken(32) → "a1b2c3d4..."
+// =============================================
+function generateToken($length = 32) {
+    return bin2hex(random_bytes($length / 2));
+}
+?>
