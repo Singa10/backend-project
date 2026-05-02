@@ -1,90 +1,123 @@
 <?php
 // =============================================
-// CHAPTER 4 COMPLIANT: FETCH BOOKS
+// FETCH ALL BOOKS FROM DATABASE
 // =============================================
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-// 1. Database Connection (Chapter 4: MySQLi Procedural Style)
-$host = "localhost";
-$user = "root";
-$pass = "";
-$dbname = "bookstore_db"; // Ensure this matches your DB name
+require_once '../../config/db.php';
 
-$conn = mysqli_connect($host, $user, $pass, $dbname);
+header('Content-Type: application/json');
 
-if (!$conn) {
-    die("Connection failed: " . mysqli_connect_error());
-}
+// ---- Get filter parameters ----
+$category = $_GET['category'] ?? '';
+$priceRange = $_GET['price'] ?? '';
+$rating = $_GET['rating'] ?? '';
+$search = $_GET['search'] ?? '';
+$sort = $_GET['sort'] ?? 'featured';
+$page = (int)($_GET['page'] ?? 1);
+$limit = (int)($_GET['limit'] ?? 12);
+$offset = ($page - 1) * $limit;
 
-// 2. Handling User Input (Chapter 3: $_GET and HTML Sanitization)
-$category = isset($_GET['category']) ? $_GET['category'] : '';
-$search = isset($_GET['search']) ? $_GET['search'] : '';
+try {
+    // ---- Build query dynamically ----
+    $where = [];
+    $params = [];
 
-// 3. Building the SQL Query (Chapter 4: Basic SELECT & JOIN)
-// We use a simpler string concatenation method as taught in early integration
-$sql = "SELECT books.*, categories.name as cat_name 
-        FROM books 
-        LEFT JOIN categories ON books.category_id = categories.id 
-        WHERE books.in_stock = 1";
+    // Category filter
+    if (!empty($category)) {
+        $where[] = "c.slug = ?";
+        $params[] = $category;
+    }
 
-// Adding simple filters
-if (!empty($category)) {
-    // Sanitize input to prevent basic issues (Chapter 3/4)
-    $safe_category = mysqli_real_escape_string($conn, $category);
-    $sql .= " AND categories.slug = '$safe_category'";
-}
-
-if (!empty($search)) {
-    $safe_search = mysqli_real_escape_string($conn, $search);
-    $sql .= " AND (books.title LIKE '%$safe_search%' OR books.author LIKE '%$safe_search%')";
-}
-
-// 4. Executing Query (Chapter 4)
-$result = mysqli_query($conn, $sql);
-
-// 5. Displaying Results (Chapter 2: Loops & Chapter 1: HTML/PHP Mix)
-?>
-
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Book Catalog</title>
-    <style>
-        .book-card { border: 1px solid #ccc; padding: 10px; margin: 10px; display: inline-block; width: 200px; }
-    </style>
-</head>
-<body>
-
-    <h1>Our Books</h1>
-
-    <form method="GET" action="">
-        <input type="text" name="search" placeholder="Search books..." value="<?php echo htmlspecialchars($search); ?>">
-        <button type="submit">Search</button>
-    </form>
-
-    <div class="book-container">
-        <?php 
-        // Chapter 2: Using a while loop to fetch data
-        if (mysqli_num_rows($result) > 0) {
-            while($book = mysqli_fetch_assoc($result)) { 
-        ?>
-            <div class="book-card">
-                <h3><?php echo htmlspecialchars($book['title']); ?></h3>
-                <p>Author: <?php echo htmlspecialchars($book['author']); ?></p>
-                <p>Category: <?php echo htmlspecialchars($book['cat_name']); ?></p>
-                <p><strong>Price: $<?php echo number_format($book['price'], 2); ?></strong></p>
-            </div>
-        <?php 
-            } 
+    // Price filter
+    if (!empty($priceRange)) {
+        if (strpos($priceRange, '+') !== false) {
+            $min = (float) str_replace('+', '', $priceRange);
+            $where[] = "b.price >= ?";
+            $params[] = $min;
         } else {
-            echo "<p>No books found.</p>";
+            $parts = explode('-', $priceRange);
+            if (count($parts) === 2) {
+                $where[] = "b.price >= ? AND b.price <= ?";
+                $params[] = (float) $parts[0];
+                $params[] = (float) $parts[1];
+            }
         }
-        ?>
-    </div>
+    }
 
-</body>
-</html>
+    // Rating filter
+    if (!empty($rating)) {
+        $where[] = "b.rating >= ?";
+        $params[] = (float) $rating;
+    }
 
-<?php
-// Close connection (Chapter 4)
-mysqli_close($conn);
+    // Search filter
+    if (!empty($search)) {
+        $where[] = "(b.title LIKE ? OR b.author LIKE ?)";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
+
+    // Only in-stock books
+    $where[] = "b.in_stock = 1";
+
+    // Build WHERE clause
+    $whereClause = '';
+    if (!empty($where)) {
+        $whereClause = 'WHERE ' . implode(' AND ', $where);
+    }
+
+    // ---- Sorting (PHP 7 compatible) ----
+    switch ($sort) {
+        case 'price-low':
+            $orderBy = 'b.price ASC';
+            break;
+        case 'price-high':
+            $orderBy = 'b.price DESC';
+            break;
+        case 'rating':
+            $orderBy = 'b.rating DESC';
+            break;
+        default:
+            $orderBy = 'b.reviews DESC';
+            break;
+    }
+
+    // ---- Count total results ----
+    $countSql = "SELECT COUNT(*) as total 
+                 FROM books b 
+                 LEFT JOIN categories c ON b.category_id = c.id 
+                 $whereClause";
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute($params);
+    $total = $countStmt->fetch()['total'];
+
+    // ---- Fetch books ----
+    $sql = "SELECT b.*, c.name as category_name, c.slug as category_slug 
+            FROM books b 
+            LEFT JOIN categories c ON b.category_id = c.id 
+            $whereClause 
+            ORDER BY $orderBy 
+            LIMIT $limit OFFSET $offset";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $books = $stmt->fetchAll();
+
+    // ---- Return JSON ----
+    echo json_encode([
+        'success' => true,
+        'data' => $books,
+        'total' => (int) $total,
+        'page' => $page,
+        'totalPages' => ceil($total / $limit)
+    ]);
+
+} catch (PDOException $e) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Failed to fetch books: ' . $e->getMessage()
+    ]);
+}
 ?>

@@ -1,77 +1,41 @@
 <?php
 // =============================================
-// CHAPTER 4 COMPLIANT: FETCH SINGLE BOOK
+// FETCH SINGLE BOOK DETAILS
 // =============================================
 
-// 1. Database Connection (Chapter 4: MySQLi Procedural)
-$host = "localhost";
-$user = "root";
-$pass = "";
-$dbname = "bookstore_db";
+require_once '../../config/db.php';
 
-$conn = mysqli_connect($host, $user, $pass, $dbname);
+header('Content-Type: application/json');
 
-if (!$conn) {
-    die("Connection failed: " . mysqli_connect_error());
-}
-
-// 2. Handling Input (Chapter 3: $_GET and Type Casting)
-// We cast to (int) to ensure basic security/validation as taught in Ch 2
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$id = (int)($_GET['id'] ?? 0);
 
 if ($id <= 0) {
-    die("Invalid Book ID provided.");
+    echo json_encode(['success' => false, 'message' => 'Invalid book ID.']);
+    exit();
 }
 
-// 3. Building & Executing the Query (Chapter 4)
-// Using a JOIN to get the category name along with book details
-$sql = "SELECT books.*, categories.name as cat_name 
-        FROM books 
-        LEFT JOIN categories ON books.category_id = categories.id 
-        WHERE books.id = $id";
+try {
+    $stmt = $pdo->prepare("SELECT b.*, c.name as category_name, c.slug as category_slug 
+                           FROM books b 
+                           LEFT JOIN categories c ON b.category_id = c.id 
+                           WHERE b.id = ?");
+    $stmt->execute([$id]);
+    $book = $stmt->fetch();
 
-$result = mysqli_query($conn, $sql);
+    if (!$book) {
+        echo json_encode(['success' => false, 'message' => 'Book not found.']);
+        exit();
+    }
 
-// 4. Checking Results & Fetching (Chapter 2 Logic)
-if (mysqli_num_rows($result) > 0) {
-    $book = mysqli_fetch_assoc($result);
-} else {
-    die("Book not found in our database.");
+    echo json_encode([
+        'success' => true,
+        'data' => $book
+    ]);
+
+} catch (PDOException $e) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Failed to fetch book details.'
+    ]);
 }
-
-// 5. Outputting to the Browser (Chapter 1 & 2)
-?>
-<!DOCTYPE html>
-<html>
-<head>
-    <title><?php echo htmlspecialchars($book['title']); ?> - Details</title>
-    <style>
-        .book-detail { max-width: 600px; margin: 20px auto; font-family: sans-serif; }
-        .price { color: green; font-size: 1.5em; font-weight: bold; }
-        .back-link { display: inline-block; margin-top: 20px; }
-    </style>
-</head>
-<body>
-
-    <div class="book-detail">
-        <h1><?php echo htmlspecialchars($book['title']); ?></h1>
-        <p><strong>Author:</strong> <?php echo htmlspecialchars($book['author']); ?></p>
-        <p><strong>Category:</strong> <?php echo htmlspecialchars($book['cat_name']); ?></p>
-        <hr>
-        <p><?php echo htmlspecialchars($book['description']); ?></p>
-        <p class="price">$<?php echo number_format($book['price'], 2); ?></p>
-        
-        <p>
-            Status: <?php echo ($book['in_stock'] == 1) ? "In Stock" : "Out of Stock"; ?>
-        </p>
-
-        <a href="index.php" class="back-link">← Back to Catalog</a>
-    </div>
-
-</body>
-</html>
-
-<?php
-// Close connection (Chapter 4)
-mysqli_close($conn);
 ?>
