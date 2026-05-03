@@ -1,7 +1,4 @@
 <?php
-// =============================================
-// PLACE ORDER (creates order, payment happens next)
-// =============================================
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
@@ -40,7 +37,7 @@ if (!empty($errors)) {
 }
 
 try {
-    // Get cart items
+   
     $stmt = $pdo->prepare("SELECT c.quantity, b.id as book_id, b.title, b.price FROM cart c JOIN books b ON c.book_id = b.id WHERE c.user_id = ?");
     $stmt->execute([$userId]);
     $cartItems = $stmt->fetchAll();
@@ -50,32 +47,32 @@ try {
         exit();
     }
 
-    // Calculate total
+    
     $totalAmount = 0;
     foreach ($cartItems as $item) {
         $totalAmount += $item['price'] * $item['quantity'];
     }
 
-    // Begin transaction
+    
     $pdo->beginTransaction();
 
-    // Create order with pending payment
+    
     $stmt = $pdo->prepare("INSERT INTO orders (user_id, total_amount, status, payment_method, payment_status, shipping_name, shipping_email, shipping_address, shipping_city, shipping_zip, shipping_phone) VALUES (?, ?, 'pending', 'pending', 'pending', ?, ?, ?, ?, ?, ?)");
     $stmt->execute([$userId, $totalAmount, $shippingName, $shippingEmail, $shippingAddress, $shippingCity, $shippingZip, $shippingPhone]);
 
     $orderId = $pdo->lastInsertId();
 
-    // Create order items
+   
     $stmt = $pdo->prepare("INSERT INTO order_items (order_id, book_id, quantity, price) VALUES (?, ?, ?, ?)");
     foreach ($cartItems as $item) {
         $stmt->execute([$orderId, $item['book_id'], $item['quantity'], $item['price']]);
     }
 
-    // Clear cart
+   
     $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ?");
     $stmt->execute([$userId]);
 
-    // Commit
+  
     $pdo->commit();
 
     echo json_encode([
